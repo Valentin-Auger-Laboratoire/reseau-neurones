@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Réseau de neurones</title>
+  <meta name="description" content="Réseau de neurones écrit à la main, sans bibliothèque : on le voit apprendre en direct, la rétropropagation pas à pas avec ses calculs, et la reconnaissance de chiffres manuscrits qu'on dessine soi-même.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0c0c0d; --panel: #161618; --border: #262628; --border-hi: #3a3a3d;
+      --text: #f2f2f2; --dim: #9b9b9f; --muted: #6c6c70; --accent: #c8102e; --line: #c9c9cc; --warn: #e0a458; --ok: #8fd18f;
+      --mono: "JetBrains Mono", ui-monospace, monospace; --sans: "Inter", system-ui, sans-serif;
+      color-scheme: dark;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); line-height: 1.55; -webkit-font-smoothing: antialiased; }
+    .wrap { max-width: 1320px; margin: 0 auto; padding: 24px max(16px, env(safe-area-inset-right, 0px)) 48px max(16px, env(safe-area-inset-left, 0px)); }
+    .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+    .back { font-size: 0.9rem; color: var(--dim); text-decoration: none; }
+    .back:hover { color: var(--accent); }
+    .lang { display: flex; border: 1px solid var(--border-hi); }
+    .lang button { font: 500 0.78rem var(--mono); letter-spacing: .05em; background: none; color: var(--dim); border: 0; padding: 5px 10px; cursor: pointer; }
+    .lang button + button { border-left: 1px solid var(--border-hi); }
+    .lang button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+    .eyebrow { font: 500 0.82rem var(--mono); color: var(--accent); letter-spacing: .04em; }
+    h1 { font-size: clamp(1.6rem, 3.4vw, 2.3rem); line-height: 1.15; margin: 6px 0 10px; text-wrap: balance; }
+    .intro { color: var(--dim); max-width: 86ch; }
+    .tabs { display: flex; gap: 8px; margin: 24px 0 16px; flex-wrap: wrap; }
+    .tab { font: 0.85rem var(--mono); background: none; color: var(--dim); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+    .tab[aria-selected="true"] { color: var(--accent); border-color: var(--accent); }
+    [hidden] { display: none !important; }
+    .grid { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 20px; align-items: start; }
+    .stack { display: grid; gap: 16px; min-width: 0; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; min-width: 0; }
+    h2 { font: 600 0.78rem var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    h3 { font: 600 0.72rem var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin: 14px 0 10px; padding-top: 12px; border-top: 1px solid var(--border); }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .btn { font: 500 0.8rem var(--sans); background: none; color: var(--text); border: 1px solid var(--border-hi); border-radius: 6px; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn.primary:hover { color: #fff; filter: brightness(1.1); }
+    .btn:disabled { opacity: .4; cursor: default; }
+    .seg { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .lbl { font: 500 0.76rem var(--mono); color: var(--dim); margin-bottom: 4px; }
+    .ctl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; margin-bottom: 10px; }
+    .ctl label { font: 500 0.76rem var(--mono); color: var(--dim); }
+    .ctl output { font: 0.8rem var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+    .ctl input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+    .scen { display: grid; gap: 6px; margin-bottom: 6px; }
+    .scen .btn { text-align: left; white-space: normal; line-height: 1.3; }
+    .kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+    .kpi { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; min-width: 0; }
+    .kpi dt { font: 0.66rem var(--mono); color: var(--dim); }
+    .kpi dd { font: 600 1.02rem var(--sans); font-variant-numeric: tabular-nums; margin-top: 2px; overflow-wrap: anywhere; }
+    .kpi dd small { font: 400 0.7rem var(--mono); color: var(--dim); margin-left: 3px; }
+    .kpi.main dd { color: var(--accent); }
+    .duo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 12px; margin-top: 12px; }
+    canvas { display: block; }
+    .sq { width: 100%; aspect-ratio: 1; border: 1px solid var(--border); border-radius: 6px; background: #0a0a0b; }
+    .netc { width: 100%; height: 100%; min-height: 320px; border: 1px solid var(--border); border-radius: 6px; background: #0a0a0b; }
+    .chart canvas { width: 100%; height: 190px; border: 1px solid var(--border); border-radius: 6px; background: #0a0a0b; }
+    .chart p { font: 0.72rem var(--mono); color: var(--dim); margin-bottom: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .chart p i { display: inline-block; width: 12px; height: 2px; vertical-align: 3px; margin-right: 5px; }
+    .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; font: 0.78rem var(--mono); color: var(--dim); }
+    .cap { font: 0.72rem var(--mono); color: var(--dim); margin-bottom: 4px; display: flex; justify-content: space-between; gap: 6px; }
+    table { width: 100%; border-collapse: collapse; font: 0.78rem var(--mono); font-variant-numeric: tabular-nums; }
+    th, td { text-align: left; padding: 5px 7px; border-bottom: 1px solid var(--border); }
+    td.n, th.n { text-align: right; }
+    th { color: var(--dim); font-weight: 500; }
+    td.good { color: var(--ok); } td.bad { color: #ff8a8a; }
+    .tablewrap { overflow-x: auto; }
+    .hint { font-size: 0.8rem; color: var(--dim); margin-top: 8px; }
+    .note { font-size: 0.82rem; color: var(--dim); }
+    .note p + p { margin-top: 6px; }
+    .formula { font: 0.82rem/1.7 var(--mono); background: #0a0a0b; border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; color: var(--line); white-space: pre-wrap; overflow-x: auto; }
+    .formula b { color: var(--accent); font-weight: 500; }
+    .steps { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+    .steps span { font: 0.74rem var(--mono); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; color: var(--muted); }
+    .steps span.on { color: var(--accent); border-color: var(--accent); }
+    .digits { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+    #pad { width: 100%; aspect-ratio: 1; border: 1px solid var(--border-hi); border-radius: 6px; background: #000; touch-action: none; cursor: crosshair; }
+    .probs { display: grid; gap: 4px; font: 0.78rem var(--mono); }
+    .probs div { display: grid; grid-template-columns: 16px minmax(0, 1fr) 64px; white-space: nowrap; gap: 8px; align-items: center; }
+    .probs i { display: block; height: 12px; background: var(--border-hi); border-radius: 2px; }
+    .probs .best i { background: var(--accent); }
+    .probs .best { color: var(--text); }
+    .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 6px; }
+    .thumbs figure { font: 0.66rem var(--mono); color: var(--dim); text-align: center; }
+    .thumbs canvas { width: 100%; aspect-ratio: 1; image-rendering: pixelated; border: 1px solid var(--border); border-radius: 3px; }
+    .conf td { text-align: center; padding: 3px; font-size: 0.72rem; }
+    .row8 { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+    .row8 canvas { width: 64px; height: 64px; image-rendering: pixelated; border: 1px solid var(--border); border-radius: 3px; }
+    @media (max-width: 1150px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 1000px) { .grid { grid-template-columns: minmax(0, 1fr); } .main-col { order: -1; } }
+    @media (max-width: 760px) { .duo, .digits { grid-template-columns: minmax(0, 1fr); } .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <a class="back" href="https://valentin-auger-laboratoire.github.io/portfolio/#projets" data-t="back">← Retour au portfolio</a>
+      <div class="lang" role="group" aria-label="Langue / Language"><button type="button" data-lang="fr" aria-pressed="true">FR</button><button type="button" data-lang="en" aria-pressed="false">EN</button></div>
+    </div>
+    <p class="eyebrow" data-t="eyebrow">Outil d'intelligence artificielle · apprentissage</p>
+    <h1 data-t="title">Un réseau de neurones écrit à la main</h1>
+    <p class="intro" data-t="intro"></p>
+
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab" role="tab" data-view="learn" aria-selected="true" data-t="tLearn">Le voir apprendre</button>
+      <button type="button" class="tab" role="tab" data-view="step" aria-selected="false" data-t="tStep">La rétropropagation pas à pas</button>
+      <button type="button" class="tab" role="tab" data-view="digits" aria-selected="false" data-t="tDigits">Chiffres manuscrits</button>
+      <button type="button" class="tab" role="tab" data-view="checks" aria-selected="false" data-t="tChecks">Vérifications</button>
+    </div>
+
+    <!-- ============ APPRENDRE ============ -->
+    <section data-pane="learn" class="grid">
+      <div class="stack"><div class="panel" id="ctl"></div></div>
+      <div class="stack main-col">
+        <div class="panel">
+          <dl class="kpis" id="kpis"></dl>
+          <div class="duo">
+            <div><p class="cap"><span id="mapCap"></span></p><canvas id="cvMap" class="sq" aria-label="Frontière de décision"></canvas></div>
+            <div style="display:flex;flex-direction:column"><p class="cap"><span data-t="netCap">Le réseau (cliquer sur un neurone pour voir ce qu'il calcule)</span></p><canvas id="cvNet" class="netc" aria-label="Schéma du réseau"></canvas></div>
+          </div>
+          <div class="controls">
+            <button type="button" class="btn primary" id="play" data-t="pause">Pause</button>
+            <button type="button" class="btn" id="stepE" data-t="stepE">+1 époque</button>
+            <button type="button" class="btn" id="reset" data-t="reset">Nouveaux poids</button>
+            <span data-t="speed">Vitesse</span><span class="seg" id="speed" style="margin:0"></span>
+          </div>
+          <p class="hint" data-t="mapHint"></p>
+        </div>
+        <div class="panel chart"><p><span><i style="background:var(--line)"></i><span data-t="lgTrain">apprentissage</span></span><span><i style="background:var(--accent)"></i><span data-t="lgTest">test (points jamais vus)</span></span><span data-t="lgLoss">perte selon l'époque</span></p><canvas id="cvLoss"></canvas></div>
+        <div class="panel note"><p data-t="noteL1"></p><p data-t="noteL2"></p></div>
+      </div>
+    </section>
+
+    <!-- ============ PAS À PAS ============ -->
+    <section data-pane="step" class="stack" hidden>
+      <div class="panel">
+        <h2><span data-t="stepT">Un exemple, un réseau 2-2-1, tous les calculs</span></h2>
+        <div class="steps" id="stepsBar"></div>
+        <div class="duo" style="margin-top:0">
+          <canvas id="cvStep" class="netc" style="min-height:340px" aria-label="Réseau 2-2-1"></canvas>
+          <div><div class="formula" id="formula"></div></div>
+        </div>
+        <div class="controls">
+          <button type="button" class="btn primary" id="sNext" data-t="sNext">Étape suivante</button>
+          <button type="button" class="btn" id="sAuto" data-t="sAuto">Enchaîner 50 exemples</button>
+          <button type="button" class="btn" id="sNew" data-t="sNew">Autre exemple</button>
+          <button type="button" class="btn" id="sReset" data-t="sReset">Recommencer</button>
+          <span>η</span><span class="seg" id="sEta" style="margin:0"></span>
+        </div>
+      </div>
+      <div class="panel"><h2><span data-t="gradT">Chaque gradient, calculé deux fois</span></h2><div class="tablewrap"><table id="gradTab"></table></div><p class="hint" data-t="gradHint"></p></div>
+      <div class="panel note"><p data-t="noteS1"></p><p data-t="noteS2"></p></div>
+    </section>
+
+    <!-- ============ CHIFFRES ============ -->
+    <section data-pane="digits" class="grid" hidden>
+      <div class="stack"><div class="panel" id="dctl"></div></div>
+      <div class="stack main-col">
+        <div class="panel">
+          <dl class="kpis" id="dkpis"></dl>
+          <div class="digits" style="margin-top:12px">
+            <div>
+              <p class="cap"><span data-t="padCap">Dessinez un chiffre</span><button type="button" class="btn" id="clear" data-t="clear" style="padding:2px 8px;font-size:0.72rem">Effacer</button></p>
+              <canvas id="pad" width="256" height="256" aria-label="Zone de dessin"></canvas>
+              <div class="row8"><canvas id="pad8" width="8" height="8"></canvas><span class="hint" style="margin:0" data-t="pad8Hint"></span></div>
+            </div>
+            <div><p class="cap"><span data-t="probCap">Ce que le réseau répond</span></p><div class="probs" id="probs"></div></div>
+          </div>
+        </div>
+        <div class="panel chart"><p><span><i style="background:var(--line)"></i><span data-t="lgTrain">apprentissage</span></span><span><i style="background:var(--accent)"></i><span data-t="lgTest">test (points jamais vus)</span></span><span data-t="lgAcc">précision selon l'époque</span></p><canvas id="cvDAcc"></canvas></div>
+        <div class="panel"><h2><span data-t="confT">Matrice de confusion (359 chiffres de test)</span></h2><div class="tablewrap"><table class="conf" id="conf"></table></div><p class="hint" data-t="confHint"></p></div>
+        <div class="panel"><h2><span data-t="errT">Ses erreurs</span></h2><div class="thumbs" id="errs"></div></div>
+        <div class="panel"><h2><span data-t="wT">Ce que regardent les neurones de la première couche</span></h2><div class="thumbs" id="wts"></div><p class="hint" data-t="wHint"></p></div>
+        <div class="panel note"><p data-t="noteD1"></p><p data-t="noteD2"></p></div>
+      </div>
+    </section>
+
+    <!-- ============ VÉRIFICATIONS ============ -->
+    <section data-pane="checks" class="stack" hidden>
+      <div class="panel"><h2><span data-t="chkT">Vérifié en direct dans votre navigateur</span><span id="chkBusy" style="color:var(--warn);font:0.74rem var(--mono)"></span></h2><div class="tablewrap"><table id="chk"></table></div><p class="hint" data-t="chkHint"></p></div>
+      <div class="panel note"><p data-t="noteC1"></p><p data-t="noteC2"></p></div>
+    </section>
+  </div>
+
+  <script src="nn.js"></script>
+  <script src="data/chiffres.js"></script>
+  <script>
+  (function () {
+    'use strict';
+    const N = window.NN, $ = (id) => document.getElementById(id);
+    let lang = 'fr';
+    try { lang = localStorage.getItem('lang') || ((navigator.language || 'fr').toLowerCase().startsWith('fr') ? 'fr' : 'en'); } catch (e) {}
+    const T = {
+      fr: {
+        back: '← Retour au portfolio', eyebrow: "Outil d'intelligence artificielle · apprentissage", title: 'Un réseau de neurones écrit à la main',
+        intro: "Aucune bibliothèque : chaque neurone, chaque multiplication, la rétropropagation du gradient et les optimiseurs sont écrits à la main, puis vérifiés. On voit le réseau apprendre en direct et la frontière de décision se dessiner ; on suit la rétropropagation calcul par calcul ; et on l'entraîne sur 1 797 vrais chiffres manuscrits avant de lui faire lire les siens.",
+        tLearn: 'Le voir apprendre', tStep: 'La rétropropagation pas à pas', tDigits: 'Chiffres manuscrits', tChecks: 'Vérifications',
+        pause: 'Pause', play: 'Reprendre', stepE: '+1 époque', reset: 'Nouveaux poids', speed: 'Vitesse',
+        netCap: "Le réseau (cliquer sur un neurone pour voir ce qu'il calcule)",
+        mapCap: 'Frontière de décision', mapNeuron: 'Ce que calcule le neurone', back2: '(recliquer pour revenir)',
+        mapHint: "Chaque pixel est classé par le réseau : la couleur est la classe prédite, l'intensité la confiance. Points pleins : apprentissage ; points cerclés : test, jamais vus pendant l'apprentissage. Dans le schéma, chaque neurone montre sa propre carte ; l'épaisseur d'une liaison est la force du poids (rouge positif, gris négatif).",
+        lgTrain: 'apprentissage', lgTest: 'test (jamais vus)', lgLoss: "perte selon l'époque", lgAcc: "précision selon l'époque",
+        noteL1: "Ce qui se passe à chaque époque : les points d'apprentissage sont mélangés et découpés en lots ; pour chaque lot, le réseau calcule sa sortie (propagation avant), mesure son erreur (entropie croisée), remonte le gradient de cette erreur couche par couche (rétropropagation) et corrige chaque poids dans le sens qui la diminue (l'optimiseur).",
+        noteL2: "À essayer : XOR avec un seul neurone (une droite ne sépare pas les deux diagonales), puis avec 4 ; la spirale, qui demande de la profondeur ; le surapprentissage (peu de points, gros réseau : la perte de test remonte), corrigé par la régularisation L2 ; un pas trop grand, qui fait diverger.",
+        stepT: 'Un exemple, un réseau 2-2-1, tous les calculs', sNext: 'Étape suivante', sAuto: 'Enchaîner 50 exemples', sNew: 'Autre exemple', sReset: 'Recommencer',
+        steps: ['1. propagation avant', '2. perte', '3. rétropropagation', '4. mise à jour'],
+        gradT: 'Chaque gradient, calculé deux fois', gradHint: "Colonne « rétropropagation » : le calcul exact par la règle de dérivation en chaîne. Colonne « différences finies » : on bouge le poids de ±0,00001 et on regarde de combien la perte change. Les deux doivent être identiques : c'est la preuve que la rétropropagation est juste.",
+        gradCols: ['Paramètre', 'Valeur', 'Rétropropagation ∂L/∂w', 'Différences finies', 'Écart', 'Après mise à jour'],
+        noteS1: "Le réseau : 2 entrées, 2 neurones cachés en tanh, 1 sortie en sigmoïde (probabilité de la classe 1), perte = entropie croisée. Les 9 paramètres sont tous visibles. Une étape « mise à jour » applique w ← w − η·∂L/∂w : la perte sur cet exemple baisse.",
+        noteS2: "Pourquoi δ = ŷ − y à la sortie : avec une sigmoïde et l'entropie croisée, les deux dérivées se simplifient. Pour la couche cachée, l'erreur remonte par les poids de sortie puis est multipliée par la dérivée de tanh, 1 − a². C'est toute la rétropropagation : la règle de dérivation en chaîne appliquée de la sortie vers l'entrée.",
+        padCap: 'Dessinez un chiffre', clear: 'Effacer', probCap: 'Ce que le réseau répond',
+        pad8Hint: "Ce que voit le réseau : votre dessin cadré sur 32×32 pixels puis réduit en blocs de 4×4 (0 à 16 pixels allumés), comme les chiffres de la base.",
+        confT: 'Matrice de confusion (359 chiffres de test)', confHint: 'Ligne = vrai chiffre, colonne = chiffre prédit. La diagonale compte les bonnes réponses.',
+        errT: 'Ses erreurs sur le test', wT: 'Ce que regardent les neurones de la première couche', wHint: "Chaque image est l'ensemble des 64 poids d'un neurone caché, rangés comme les pixels : rouge = ce pixel l'excite, gris = il l'inhibe.",
+        noteD1: "Données : « Optical Recognition of Handwritten Digits » (E. Alpaydin, C. Kaynak, 1998), dépôt UCI Machine Learning Repository, licence CC BY 4.0 : 1 797 chiffres écrits à la main, réduits en 8×8. Découpage reproductible : 1 438 pour l'apprentissage, 359 pour le test, jamais vus pendant l'apprentissage.",
+        noteD2: "Votre dessin passe par le même principe de prétraitement (image 32×32 binaire, blocs de 4×4), avec un cadrage approché. Les chiffres de la base ont été écrits sur papier en 1998 par 43 personnes : une écriture à la souris peut les dérouter, c'est une vraie limite de l'apprentissage.",
+        chkT: 'Vérifié en direct dans votre navigateur', chkHint: "Chaque ligne est recalculée maintenant avec le moteur de la page. Les tests automatiques du dépôt (node tests/test.js) en vérifient plus de 500.",
+        chkCols: ['Vérification', 'Attendu', 'Mesuré', ''],
+        noteC1: "Ce qui est vérifié : la rétropropagation contre les différences finies, pour toutes les activations, toutes les sorties, de 0 à 3 couches cachées, avec ou sans L2 ; les optimiseurs contre leurs formules ; la descente de gradient contre la solution exacte des moindres carrés ; ce qu'un réseau peut ou ne peut pas apprendre (XOR) ; la précision sur les chiffres de test.",
+        noteC2: "Limites : couches denses seulement (pas de convolution), calcul en JavaScript sur le processeur, petits jeux de données. Les résultats sur les chiffres dépendent du tirage des poids : quelques dixièmes de point d'écart d'une fois sur l'autre.",
+        // contrôles
+        scenT: 'Expériences', dataT: 'Données', featT: 'Entrées', netT: 'Réseau', trainT: 'Apprentissage',
+        scen: { xor1: "XOR avec un seul neurone : impossible", xor4: 'XOR avec 4 neurones cachés', xyF: 'XOR sans couche cachée, mais avec x·y en entrée', spiral: 'Spirale : il faut de la profondeur', over: 'Surapprentissage : peu de points, gros réseau', l2: '… le même, avec régularisation L2', lr: 'Pas trop grand : ça diverge' },
+        ds: { circle: 'cercles', xor: 'XOR', moons: 'lunes', spiral: 'spirale', spiral3: '3 spirales', gauss: 'nuages', checker: 'damier' },
+        nPts: 'Nombre de points', noise: 'Bruit', testPart: 'Part gardée pour le test', newData: 'Nouveau tirage',
+        layers: 'Couches cachées', neurons: 'Neurones, couche', act: 'Activation', opt: 'Optimiseur', lrL: "Pas d'apprentissage η", batch: 'Taille des lots', l2: 'Régularisation L2 λ',
+        kEpoch: 'Époque', kLossTr: 'Perte (app.)', kLossTe: 'Perte (test)', kAccTr: 'Précision (app.)', kAccTe: 'Précision (test)', kParams: 'Paramètres',
+        hidden: 'Couche cachée', none: 'aucune', dTrain: 'Entraîner', dStop: 'Arrêter', dReset: 'Nouveaux poids', epochs: 'Époques par clic',
+        ok: 'ok', fail: 'écart', computing: 'calcul…', notTrained: "entraînez d'abord le réseau (onglet Chiffres)",
+      },
+      en: {
+        back: '← Back to portfolio', eyebrow: 'Artificial intelligence tool · learning', title: 'A neural network written by hand',
+        intro: 'No library: every neuron, every multiplication, gradient back-propagation and the optimisers are written by hand, then checked. Watch the network learn live and its decision boundary take shape; follow back-propagation one calculation at a time; and train it on 1,797 real handwritten digits before letting it read yours.',
+        tLearn: 'Watch it learn', tStep: 'Back-propagation step by step', tDigits: 'Handwritten digits', tChecks: 'Checks',
+        pause: 'Pause', play: 'Resume', stepE: '+1 epoch', reset: 'New weights', speed: 'Speed',
+        netCap: 'The network (click a neuron to see what it computes)',
+        mapCap: 'Decision boundary', mapNeuron: 'What this neuron computes', back2: '(click again to go back)',
+        mapHint: 'Each pixel is classified by the network: colour = predicted class, intensity = confidence. Filled dots: training; circled dots: test, never seen during training. In the diagram each neuron shows its own map; line thickness is the weight strength (red positive, grey negative).',
+        lgTrain: 'training', lgTest: 'test (never seen)', lgLoss: 'loss per epoch', lgAcc: 'accuracy per epoch',
+        noteL1: 'What happens in each epoch: the training points are shuffled and split into batches; for each batch the network computes its output (forward pass), measures its error (cross-entropy), propagates the gradient of that error back layer by layer (back-propagation) and moves each weight in the direction that lowers it (the optimiser).',
+        noteL2: 'Things to try: XOR with a single neuron (a straight line cannot separate the two diagonals), then with 4; the spiral, which needs depth; overfitting (few points, big network: test loss goes back up), fixed by L2 regularisation; a learning rate that is too large, which diverges.',
+        stepT: 'One example, a 2-2-1 network, every calculation', sNext: 'Next step', sAuto: 'Run 50 examples', sNew: 'Another example', sReset: 'Start over',
+        steps: ['1. forward pass', '2. loss', '3. back-propagation', '4. update'],
+        gradT: 'Every gradient, computed twice', gradHint: '“Back-propagation” column: the exact calculation by the chain rule. “Finite differences” column: nudge the weight by ±0.00001 and see how much the loss changes. Both must match: that is the proof back-propagation is right.',
+        gradCols: ['Parameter', 'Value', 'Back-propagation ∂L/∂w', 'Finite differences', 'Error', 'After update'],
+        noteS1: 'The network: 2 inputs, 2 hidden tanh neurons, 1 sigmoid output (probability of class 1), loss = cross-entropy. All 9 parameters are visible. An “update” step applies w ← w − η·∂L/∂w: the loss on this example goes down.',
+        noteS2: 'Why δ = ŷ − y at the output: with a sigmoid and cross-entropy the two derivatives simplify. For the hidden layer, the error flows back through the output weights and is multiplied by the derivative of tanh, 1 − a². That is all of back-propagation: the chain rule applied from the output towards the input.',
+        padCap: 'Draw a digit', clear: 'Clear', probCap: 'What the network answers',
+        pad8Hint: 'What the network sees: your drawing framed on 32×32 pixels then reduced to 4×4 blocks (0 to 16 pixels on), like the digits in the dataset.',
+        confT: 'Confusion matrix (359 test digits)', confHint: 'Row = true digit, column = predicted digit. The diagonal counts the correct answers.',
+        errT: 'Its mistakes on the test set', wT: 'What the first-layer neurons look at', wHint: 'Each image is the 64 weights of one hidden neuron laid out like the pixels: red = this pixel excites it, grey = inhibits it.',
+        noteD1: 'Data: “Optical Recognition of Handwritten Digits” (E. Alpaydin, C. Kaynak, 1998), UCI Machine Learning Repository, CC BY 4.0 licence: 1,797 handwritten digits reduced to 8×8. Reproducible split: 1,438 for training, 359 for testing, never seen during training.',
+        noteD2: 'Your drawing goes through the same preprocessing principle (32×32 binary image, 4×4 blocks), with approximate framing. The dataset digits were written on paper in 1998 by 43 people: mouse handwriting can confuse it, which is a real limit of learning.',
+        chkT: 'Checked live in your browser', chkHint: "Each line is recomputed now with this page's engine. The repository's automated tests (node tests/test.js) check more than 500.",
+        chkCols: ['Check', 'Expected', 'Measured', ''],
+        noteC1: 'What is checked: back-propagation against finite differences for every activation, every output, 0 to 3 hidden layers, with or without L2; the optimisers against their formulas; gradient descent against the exact least-squares solution; what a network can or cannot learn (XOR); accuracy on the test digits.',
+        noteC2: 'Limits: dense layers only (no convolution), JavaScript on the CPU, small datasets. Results on the digits depend on the random weights: a few tenths of a point from one run to the next.',
+        scenT: 'Experiments', dataT: 'Data', featT: 'Inputs', netT: 'Network', trainT: 'Training',
+        scen: { xor1: 'XOR with a single neuron: impossible', xor4: 'XOR with 4 hidden neurons', xyF: 'XOR with no hidden layer but x·y as input', spiral: 'Spiral: depth is needed', over: 'Overfitting: few points, big network', l2: '… the same, with L2 regularisation', lr: 'Learning rate too large: it diverges' },
+        ds: { circle: 'circles', xor: 'XOR', moons: 'moons', spiral: 'spiral', spiral3: '3 spirals', gauss: 'blobs', checker: 'checkerboard' },
+        nPts: 'Number of points', noise: 'Noise', testPart: 'Share kept for testing', newData: 'New draw',
+        layers: 'Hidden layers', neurons: 'Neurons, layer', act: 'Activation', opt: 'Optimiser', lrL: 'Learning rate η', batch: 'Batch size', l2: 'L2 regularisation λ',
+        kEpoch: 'Epoch', kLossTr: 'Loss (train)', kLossTe: 'Loss (test)', kAccTr: 'Accuracy (train)', kAccTe: 'Accuracy (test)', kParams: 'Parameters',
+        hidden: 'Hidden layer', none: 'none', dTrain: 'Train', dStop: 'Stop', dReset: 'New weights', epochs: 'Epochs per click',
+        ok: 'ok', fail: 'off', computing: 'computing…', notTrained: 'train the network first (Digits tab)',
+      },
+    };
+    const t = (k) => (T[lang][k] !== undefined ? T[lang][k] : T.fr[k]);
+    const fmt = (v, d) => (isFinite(v) ? v.toFixed(d) : '—').replace('.', lang === 'fr' ? ',' : '.');
+    const pct = (v) => fmt(v * 100, 1) + ' %';
+    const CLS = [[201, 201, 204], [200, 16, 46], [224, 164, 88]];
+    function setup(cv) { const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight; if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); } const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); return { c, w, h }; }
+    function seg(box, list, cur, onPick) {
+      const s = document.createElement('div'); s.className = 'seg';
+      list.forEach(([v, label]) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = label; b.setAttribute('aria-pressed', String(v) === String(cur)); b.addEventListener('click', () => onPick(v)); s.appendChild(b); });
+      box.appendChild(s); return s;
+    }
+    const lbl = (box, txt) => { const p = document.createElement('p'); p.className = 'lbl'; p.textContent = txt; box.appendChild(p); };
+    const h3 = (box, txt) => { const h = document.createElement('h3'); h.textContent = txt; box.appendChild(h); };
+    function slider(box, label, val, min, max, step, show, onInput) {
+      const d = document.createElement('div'); d.className = 'ctl'; const id = 'r' + Math.random().toString(36).slice(2, 8);
+      d.innerHTML = '<label for="' + id + '">' + label + '</label><output></output><input type="range" id="' + id + '" min="' + min + '" max="' + max + '" step="' + step + '">';
+      const inp = d.querySelector('input'), out = d.querySelector('output'); inp.value = val; out.textContent = show(+inp.value);
+      inp.addEventListener('input', () => { out.textContent = show(+inp.value); onInput(+inp.value, false); });
+      inp.addEventListener('change', () => onInput(+inp.value, true));
+      box.appendChild(d);
+    }
+    const logS = (min, max) => ({ to: (v) => Math.log(v / min) / Math.log(max / min), from: (u) => min * Math.pow(max / min, u) });
+    const LR = logS(1e-4, 10);
+    const sig2 = (v) => { const e = Math.floor(Math.log10(v)); const m = v / 10 ** e; return (Math.round(m * 10) / 10) * 10 ** e; };
+
+    // ================================================================== 1. APPRENDRE
+    const L = { ds: 'circle', n: 300, noise: 0.3, test: 0.3, seed: 3, feats: ['x', 'y'], hidden: [6, 4], act: 'tanh', opt: 'adam', lr: 0.03, batch: 16, l2: 0, speed: 2 };
+    let LD = null, net = null, opt = null, epochN = 0, hist = [], running = true, focus = null, rTrain = N.rng(1);
+    function buildData() {
+      const d = N.dataset(L.ds, L.n, L.noise, L.seed), sp = N.split(L.n, L.test, L.seed + 1);
+      LD = { K: d.K, P: d.P, Y: d.Y, train: sp.train, test: sp.test };
+      LD.Xtr = sp.train.map((i) => N.featurize(d.P[i], L.feats)); LD.Ytr = sp.train.map((i) => d.Y[i]);
+      LD.Xte = sp.test.map((i) => N.featurize(d.P[i], L.feats)); LD.Yte = sp.test.map((i) => d.Y[i]);
+    }
+    function buildNet(seed) {
+      const K = LD.K, sizes = [L.feats.length].concat(L.hidden, [K === 2 ? 1 : K]);
+      net = N.create(sizes, L.act, K === 2 ? 'sigmoid' : 'softmax', seed || 1);
+      opt = N.optimizer(net, { type: L.opt, lr: L.lr }); epochN = 0; hist = []; focus = null; rTrain = N.rng(seed || 1);
+      measure();
+    }
+    function measure() {
+      const lt = LD.Xtr.length ? N.meanLoss(net, LD.Xtr, LD.Ytr) : NaN, le = LD.Xte.length ? N.meanLoss(net, LD.Xte, LD.Yte) : NaN;
+      hist.push([epochN, lt, le]); if (hist.length > 2000) hist.splice(1, 1);
+    }
+    function trainEpoch() { if (!LD.Xtr.length) return; N.epoch(net, opt, LD.Xtr, LD.Ytr, L.batch, L.l2, rTrain); epochN++; measure(); }
+    const SCEN = {
+      xor1: { ds: 'xor', noise: 0.1, n: 300, feats: ['x', 'y'], hidden: [], act: 'tanh', opt: 'adam', lr: 0.03, l2: 0, test: 0.3 },
+      xor4: { ds: 'xor', noise: 0.1, n: 300, feats: ['x', 'y'], hidden: [4], act: 'tanh', opt: 'adam', lr: 0.03, l2: 0, test: 0.3 },
+      xyF: { ds: 'xor', noise: 0.1, n: 300, feats: ['x', 'y', 'xy'], hidden: [], act: 'tanh', opt: 'adam', lr: 0.05, l2: 0, test: 0.3 },
+      spiral: { ds: 'spiral', noise: 0.05, n: 400, feats: ['x', 'y'], hidden: [16, 16, 16], act: 'tanh', opt: 'adam', lr: 0.01, l2: 0, test: 0.2 },
+      over: { ds: 'moons', noise: 2, n: 500, feats: ['x', 'y'], hidden: [32, 32], act: 'relu', opt: 'adam', lr: 0.01, l2: 0, test: 0.9, batch: 10 },
+      l2: { ds: 'moons', noise: 2, n: 500, feats: ['x', 'y'], hidden: [32, 32], act: 'relu', opt: 'adam', lr: 0.01, l2: 0.01, test: 0.9, batch: 10 },
+      lr: { ds: 'circle', noise: 0.2, n: 300, feats: ['x', 'y'], hidden: [8], act: 'relu', opt: 'sgd', lr: 8, l2: 0, test: 0.3 },
+    };
+    let scenOn = null;
+    function renderCtl() {
+      const box = $('ctl'); box.innerHTML = '';
+      h3(box, t('scenT')); box.lastChild.style.cssText = 'margin-top:0;padding-top:0;border:0';
+      const sc = document.createElement('div'); sc.className = 'scen';
+      Object.keys(SCEN).forEach((k) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = t('scen')[k]; b.setAttribute('aria-pressed', scenOn === k); b.addEventListener('click', () => { Object.assign(L, { batch: 16 }, SCEN[k], { feats: SCEN[k].feats.slice(), hidden: SCEN[k].hidden.slice() }); scenOn = k; buildData(); buildNet(1); running = true; renderCtl(); }); sc.appendChild(b); });
+      box.appendChild(sc);
+      const free = () => { scenOn = null; };
+      h3(box, t('dataT'));
+      seg(box, N.DATASETS.map((k) => [k, t('ds')[k]]), L.ds, (v) => { L.ds = v; free(); buildData(); buildNet(1); renderCtl(); });
+      slider(box, t('nPts'), L.n, 40, 600, 20, (v) => String(v), (v, fin) => { L.n = v; if (fin) { free(); buildData(); buildNet(1); } });
+      slider(box, t('noise'), L.noise, 0, 3, 0.05, (v) => fmt(v, 2), (v, fin) => { L.noise = v; if (fin) { free(); buildData(); buildNet(1); } });
+      slider(box, t('testPart'), L.test, 0.1, 0.9, 0.05, (v) => fmt(v * 100, 0) + ' %', (v, fin) => { L.test = v; if (fin) { free(); buildData(); buildNet(1); } });
+      const nb = document.createElement('button'); nb.type = 'button'; nb.className = 'btn'; nb.textContent = t('newData'); nb.addEventListener('click', () => { L.seed++; buildData(); buildNet(1); }); box.appendChild(nb);
+      h3(box, t('featT'));
+      const fs = document.createElement('div'); fs.className = 'seg';
+      [['x', 'x'], ['y', 'y'], ['x2', 'x²'], ['y2', 'y²'], ['xy', 'x·y'], ['sinx', 'sin x'], ['siny', 'sin y']].forEach(([k, l]) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = l; b.setAttribute('aria-pressed', L.feats.includes(k)); b.addEventListener('click', () => { const i = L.feats.indexOf(k); if (i >= 0) { if (L.feats.length > 1) L.feats.splice(i, 1); } else L.feats.push(k); L.feats.sort((a, b2) => Object.keys(N.FEATURES).indexOf(a) - Object.keys(N.FEATURES).indexOf(b2)); free(); buildData(); buildNet(1); renderCtl(); }); fs.appendChild(b); });
+      box.appendChild(fs);
+      h3(box, t('netT'));
+      lbl(box, t('layers')); seg(box, [0, 1, 2, 3, 4].map((v) => [v, String(v)]), L.hidden.length, (v) => { while (L.hidden.length < v) L.hidden.push(L.hidden[L.hidden.length - 1] || 4); L.hidden.length = v; free(); buildNet(1); renderCtl(); });
+      L.hidden.forEach((h, i) => slider(box, t('neurons') + ' ' + (i + 1), h, 1, 32, 1, (v) => String(v), (v, fin) => { L.hidden[i] = v; if (fin) { free(); buildNet(1); } }));
+      lbl(box, t('act')); seg(box, [['relu', 'ReLU'], ['leaky', 'Leaky ReLU'], ['tanh', 'tanh'], ['sigmoid', lang === 'fr' ? 'sigmoïde' : 'sigmoid']], L.act, (v) => { L.act = v; free(); buildNet(1); renderCtl(); });
+      h3(box, t('trainT'));
+      lbl(box, t('opt')); seg(box, [['sgd', lang === 'fr' ? 'gradient' : 'SGD'], ['momentum', lang === 'fr' ? 'moment' : 'momentum'], ['rmsprop', 'RMSprop'], ['adam', 'Adam']], L.opt, (v) => { L.opt = v; free(); opt = N.optimizer(net, { type: v, lr: L.lr }); renderCtl(); });
+      slider(box, t('lrL'), LR.to(L.lr), 0, 1, 0.001, (u) => String(sig2(LR.from(u))), (u) => { L.lr = sig2(LR.from(u)); free(); opt = N.optimizer(net, { type: L.opt, lr: L.lr }); });
+      lbl(box, t('batch')); seg(box, [1, 4, 16, 64, 256].map((v) => [v, String(v)]), L.batch, (v) => { L.batch = v; free(); renderCtl(); });
+      lbl(box, t('l2')); seg(box, [0, 1e-4, 1e-3, 1e-2, 1e-1].map((v) => [v, v ? String(v) : '0']), L.l2, (v) => { L.l2 = v; free(); renderCtl(); });
+    }
+    // calcul de toutes les activations sur une grille (carte de décision + cartes des neurones)
+    const G = 96;
+    function gridMaps() {
+      const maps = net.sizes.map((s) => Array.from({ length: s }, () => new Float32Array(G * G))), out = new Float32Array(G * G * Math.max(1, LD.K)), cls = new Uint8Array(G * G);
+      for (let r = 0; r < G; r++) for (let c = 0; c < G; c++) {
+        const p = [-1.2 + (2.4 * (c + 0.5)) / G, 1.2 - (2.4 * (r + 0.5)) / G], fw = N.forward(net, N.featurize(p, L.feats)), i = r * G + c;
+        fw.a.forEach((a, l) => a.forEach((v, j) => (maps[l][j][i] = v)));
+        const o = fw.a[fw.a.length - 1];
+        if (LD.K === 2) { cls[i] = o[0] >= 0.5 ? 1 : 0; out[i] = Math.abs(o[0] - 0.5) * 2; } else { cls[i] = N.argmax(o); out[i] = (o[cls[i]] - 1 / 3) * 1.5; }
+      }
+      return { maps, cls, conf: out };
+    }
+    let lastGrid = null;
+    const toPx = (v, w) => ((v + 1.2) / 2.4) * w;
+    function drawMap() {
+      const cv = $('cvMap'), { c, w, h } = setup(cv); c.fillStyle = '#0a0a0b'; c.fillRect(0, 0, w, h);
+      const gm = lastGrid, img = c.createImageData(G, G);
+      for (let i = 0; i < G * G; i++) {
+        let col;
+        if (focus) {
+          const v = gm.maps[focus[0]][focus[1]][i], fl = focus[0] === net.sizes.length - 1, x = fl ? (net.out === 'sigmoid' ? v * 2 - 1 : v * 2 - 1) : (net.act === 'sigmoid' ? v * 2 - 1 : Math.max(-1, Math.min(1, v)));
+          col = x >= 0 ? [200 * x + 12 * (1 - x), 16 * x + 12 * (1 - x), 46 * x + 13 * (1 - x)] : [12 + 150 * -x, 12 + 150 * -x, 13 + 155 * -x];
+        } else { const k = gm.cls[i] === 0 ? [110, 110, 116] : CLS[gm.cls[i]], a = 0.2 + 0.5 * Math.max(0, Math.min(1, gm.conf[i])); col = [12 + (k[0] - 12) * a, 12 + (k[1] - 12) * a, 13 + (k[2] - 13) * a]; }
+        img.data[4 * i] = col[0]; img.data[4 * i + 1] = col[1]; img.data[4 * i + 2] = col[2]; img.data[4 * i + 3] = 255;
+      }
+      const off = document.createElement('canvas'); off.width = G; off.height = G; off.getContext('2d').putImageData(img, 0, 0);
+      c.imageSmoothingEnabled = true; c.drawImage(off, 0, 0, w, h);
+      const dot = (i, test) => { const p = LD.P[i], x = toPx(p[0], w), y = h - toPx(p[1], h), k = CLS[LD.Y[i]]; c.beginPath(); c.arc(x, y, test ? 4 : 3.2, 0, 7); if (test) { c.strokeStyle = 'rgb(' + k + ')'; c.lineWidth = 1.6; c.stroke(); } else { c.fillStyle = 'rgb(' + k + ')'; c.fill(); c.strokeStyle = '#0c0c0d'; c.lineWidth = 0.8; c.stroke(); } };
+      LD.train.forEach((i) => dot(i, false)); LD.test.forEach((i) => dot(i, true));
+      $('mapCap').textContent = focus ? t('mapNeuron') + ' ' + (focus[0] === net.sizes.length - 1 ? (lang === 'fr' ? 'de sortie' : 'output') : focus[0] + '.' + (focus[1] + 1)) + ' ' + t('back2') : t('mapCap');
+    }
+    let netLayout = [];
+    function drawNet() {
+      const cv = $('cvNet'), { c, w, h } = setup(cv); c.fillStyle = '#0a0a0b'; c.fillRect(0, 0, w, h);
+      const sizes = net.sizes, nl = sizes.length, maxN = Math.max(...sizes), cell = Math.max(14, Math.min(40, (h - 24) / maxN - 6, (w - 40) / (nl * 2.2)));
+      const colX = (l) => 20 + cell / 2 + (l * (w - 40 - cell)) / Math.max(1, nl - 1);
+      netLayout = sizes.map((s, l) => Array.from({ length: s }, (_, j) => [colX(l), h / 2 + (j - (s - 1) / 2) * (cell + 6)]));
+      let wmax = 1e-9; net.W.forEach((W) => W.forEach((v) => (wmax = Math.max(wmax, Math.abs(v)))));
+      net.W.forEach((W, l) => { const nin = sizes[l]; for (let j = 0; j < sizes[l + 1]; j++) for (let i = 0; i < nin; i++) { const v = W[j * nin + i], a = netLayout[l][i], b = netLayout[l + 1][j]; c.strokeStyle = v > 0 ? 'rgba(200,16,46,' + (0.25 + 0.6 * Math.abs(v) / wmax) + ')' : 'rgba(170,170,175,' + (0.2 + 0.55 * Math.abs(v) / wmax) + ')'; c.lineWidth = 0.4 + 3.2 * Math.abs(v) / wmax; c.beginPath(); c.moveTo(a[0] + cell / 2, a[1]); c.lineTo(b[0] - cell / 2, b[1]); c.stroke(); } });
+      const off = document.createElement('canvas'); off.width = G; off.height = G; const oc = off.getContext('2d');
+      netLayout.forEach((col, l) => col.forEach(([x, y], j) => {
+        const m = lastGrid.maps[l][j], img = oc.createImageData(G, G); let lo = Infinity, hi = -Infinity; for (const v of m) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+        const sc = Math.max(Math.abs(lo), Math.abs(hi)) || 1;
+        for (let i = 0; i < G * G; i++) { const v = l === nl - 1 && net.out === 'sigmoid' ? m[i] * 2 - 1 : (net.act === 'sigmoid' && l > 0 && l < nl - 1 ? m[i] * 2 - 1 : m[i] / sc); const col2 = v >= 0 ? [12 + 188 * v, 12 + 4 * v, 13 + 33 * v] : [12 - 150 * v, 12 - 150 * v, 13 - 155 * v]; img.data[4 * i] = col2[0]; img.data[4 * i + 1] = col2[1]; img.data[4 * i + 2] = col2[2]; img.data[4 * i + 3] = 255; }
+        oc.putImageData(img, 0, 0); c.drawImage(off, x - cell / 2, y - cell / 2, cell, cell);
+        c.strokeStyle = focus && focus[0] === l && focus[1] === j ? '#f2f2f2' : '#3a3a3d'; c.lineWidth = focus && focus[0] === l && focus[1] === j ? 2 : 1; c.strokeRect(x - cell / 2, y - cell / 2, cell, cell);
+        if (l === 0) { c.fillStyle = '#9b9b9f'; c.font = '10px "JetBrains Mono", monospace'; c.textAlign = 'right'; c.fillText({ x: 'x', y: 'y', x2: 'x²', y2: 'y²', xy: 'xy', sinx: 'sin x', siny: 'sin y' }[L.feats[j]], x - cell / 2 - 3, y + 3); }
+      }));
+      c.fillStyle = '#6c6c70'; c.font = '10px "JetBrains Mono", monospace'; c.textAlign = 'center';
+      netLayout.forEach((col, l) => c.fillText(l === 0 ? (lang === 'fr' ? 'entrées' : 'inputs') : l === nl - 1 ? (lang === 'fr' ? 'sortie' : 'output') : String(sizes[l]), col[0][0], 12));
+    }
+    $('cvNet').addEventListener('click', (e) => {
+      const r = e.target.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top; let hit = null;
+      netLayout.forEach((col, l) => col.forEach(([cx, cy], j) => { if (Math.abs(x - cx) < 20 && Math.abs(y - cy) < 20) hit = [l, j]; }));
+      focus = hit && !(focus && focus[0] === hit[0] && focus[1] === hit[1]) ? hit : null;
+    });
+    function drawCurve(cv, series, ylab, maxY, isAcc) {
+      const { c, w, h } = setup(cv); c.fillStyle = '#0a0a0b'; c.fillRect(0, 0, w, h);
+      const pl = 44, pb = 20, xs = series[0].map((p) => p[0]), x0 = 0, x1 = Math.max(10, xs[xs.length - 1] || 10);
+      let hi = maxY || 0; if (!maxY) series.forEach((s) => s.forEach((p) => { if (isFinite(p[1])) hi = Math.max(hi, p[1]); })); hi = hi || 1;
+      const lo = isAcc ? Math.max(0, Math.min(...series.flatMap((s) => s.map((p) => p[1]).filter(isFinite))) - 0.05) : 0;
+      const X = (v) => pl + ((v - x0) / (x1 - x0)) * (w - pl - 10), Y = (v) => 8 + (1 - (Math.min(v, hi) - lo) / (hi - lo)) * (h - 8 - pb);
+      c.font = '10px "JetBrains Mono", monospace'; c.fillStyle = '#6c6c70'; c.strokeStyle = '#1e1e21'; c.textAlign = 'right';
+      for (let k = 0; k <= 4; k++) { const v = lo + ((hi - lo) * k) / 4; c.beginPath(); c.moveTo(pl, Y(v)); c.lineTo(w - 10, Y(v)); c.stroke(); c.fillText(isAcc ? fmt(v * 100, 0) + ' %' : fmt(v, 2), pl - 4, Y(v) + 3); }
+      c.textAlign = 'center'; for (let k = 0; k <= 4; k++) c.fillText(String(Math.round((x1 * k) / 4)), X((x1 * k) / 4), h - 5);
+      series.forEach((s, i) => { c.strokeStyle = i ? '#c8102e' : '#c9c9cc'; c.lineWidth = 1.5; c.beginPath(); let st = false; s.forEach((p) => { if (!isFinite(p[1])) { st = false; return; } st ? c.lineTo(X(p[0]), Y(p[1])) : c.moveTo(X(p[0]), Y(p[1])); st = true; }); c.stroke(); });
+    }
+    function kpisL() {
+      const kpi = (k, v, u, main) => '<div class="kpi' + (main ? ' main' : '') + '"><dt>' + k + '</dt><dd>' + v + (u ? '<small>' + u + '</small>' : '') + '</dd></div>';
+      const last = hist[hist.length - 1] || [0, NaN, NaN];
+      $('kpis').innerHTML = kpi(t('kEpoch'), String(epochN), '') + kpi(t('kLossTr'), fmt(last[1], 3), '') + kpi(t('kLossTe'), fmt(last[2], 3), '') + kpi(t('kAccTr'), pct(N.accuracy(net, LD.Xtr, LD.Ytr)), '') + kpi(t('kAccTe'), LD.Xte.length ? pct(N.accuracy(net, LD.Xte, LD.Yte)) : '—', '', true) + kpi(t('kParams'), String(N.nParams(net)), '');
+    }
+    let frame = 0;
+    function loopL() {
+      if (view === 'learn' && net) {
+        if (running) { const per = [0, 1, 3, 10][L.speed]; for (let k = 0; k < per; k++) trainEpoch(); }
+        if (running || frame % 10 === 0) { lastGrid = gridMaps(); drawMap(); drawNet(); drawCurve($('cvLoss'), [hist.map((p) => [p[0], p[1]]), hist.map((p) => [p[0], p[2]])]); kpisL(); }
+        frame++;
+      }
+      requestAnimationFrame(loopL);
+    }
+    $('play').addEventListener('click', () => { running = !running; $('play').textContent = running ? t('pause') : t('play'); });
+    $('stepE').addEventListener('click', () => { trainEpoch(); lastGrid = gridMaps(); drawMap(); drawNet(); drawCurve($('cvLoss'), [hist.map((p) => [p[0], p[1]]), hist.map((p) => [p[0], p[2]])]); kpisL(); });
+    $('reset').addEventListener('click', () => buildNet(1 + Math.floor(Math.random() * 1e6)));
+    function renderSpeed() { $('speed').innerHTML = ''; seg($('speed'), [[1, '×1'], [2, '×3'], [3, '×10']], L.speed, (v) => { L.speed = v; renderSpeed(); }).style.margin = '0'; }
+
+    // ================================================================== 2. PAS À PAS
+    const SP = { eta: 0.5, phase: 0, net: null, x: null, y: 0, cache: null, grad: null, num: null, lossBefore: NaN, lossAfter: NaN, before: null, rr: N.rng(5), data: null };
+    function spReset() { SP.net = N.create([2, 2, 1], 'tanh', 'sigmoid', 3); SP.data = N.dataset('xor', 200, 0.05, 9); SP.phase = 0; spNewEx(); }
+    function spNewEx() { const i = Math.floor(SP.rr() * SP.data.P.length); SP.x = SP.data.P[i].map((v) => Math.round(v * 100) / 100); SP.y = SP.data.Y[i]; SP.phase = 0; SP.cache = null; SP.grad = null; SP.num = null; SP.before = null; spDraw(); }
+    function spStep() {
+      const net2 = SP.net;
+      if (SP.phase === 0) { SP.cache = N.forward(net2, SP.x); SP.phase = 1; }
+      else if (SP.phase === 1) { SP.lossBefore = N.lossOf(net2, SP.cache.a[2], SP.y); SP.phase = 2; }
+      else if (SP.phase === 2) {
+        const g = N.zeroGrad(net2); SP.delta2 = N.backward(net2, SP.cache, SP.y, g); SP.grad = g;
+        // δ de chaque couche, recalculés pour l'affichage
+        const a1 = SP.cache.a[1], d2 = SP.cache.a[2][0] - SP.y; SP.d2 = d2; SP.d1 = [0, 1].map((i) => net2.W[1][i] * d2 * (1 - a1[i] * a1[i]));
+        // différences finies sur chaque paramètre
+        const L0 = (n2) => N.lossOf(n2, N.predict(n2, SP.x), SP.y), h = 1e-5; SP.num = { W: net2.W.map((w) => new Float64Array(w.length)), b: net2.b.map((v) => new Float64Array(v.length)) };
+        ['W', 'b'].forEach((k) => net2[k].forEach((arr, l) => { for (let q = 0; q < arr.length; q++) { const v = arr[q]; arr[q] = v + h; const lp = L0(net2); arr[q] = v - h; const lm = L0(net2); arr[q] = v; SP.num[k][l][q] = (lp - lm) / (2 * h); } }));
+        SP.phase = 3;
+      } else {
+        SP.before = N.clone(net2);
+        ['W', 'b'].forEach((k) => net2[k].forEach((arr, l) => { for (let q = 0; q < arr.length; q++) arr[q] -= SP.eta * SP.grad[k][l][q]; }));
+        SP.lossAfter = N.lossOf(net2, N.predict(net2, SP.x), SP.y); SP.phase = 4;
+      }
+      spDraw();
+    }
+    const f4 = (v) => fmt(v, 4);
+    function spDraw() {
+      const P = SP.phase, net2 = SP.net, nb = SP.before || net2;
+      $('stepsBar').innerHTML = t('steps').map((s, i) => '<span class="' + (P >= i + 1 ? 'on' : '') + '">' + s + '</span>').join('');
+      $('sNext').textContent = P >= 4 ? (lang === 'fr' ? 'Exemple suivant' : 'Next example') : t('sNext');
+      // schéma
+      const cv = $('cvStep'), { c, w, h } = setup(cv); c.fillStyle = '#0a0a0b'; c.fillRect(0, 0, w, h);
+      const pos = [[[w * 0.12, h * 0.33], [w * 0.12, h * 0.67]], [[w * 0.5, h * 0.25], [w * 0.5, h * 0.75]], [[w * 0.86, h * 0.5]]];
+      c.font = '11px "JetBrains Mono", monospace';
+      const edge = (a, b, wv, gv, label, tf) => { c.strokeStyle = wv > 0 ? 'rgba(200,16,46,0.75)' : 'rgba(170,170,175,0.6)'; c.lineWidth = 1 + Math.min(4, Math.abs(wv) * 1.5); c.beginPath(); c.moveTo(a[0] + 22, a[1]); c.lineTo(b[0] - 22, b[1]); c.stroke(); const mx = a[0] + (b[0] - a[0]) * (tf || 0.42), my = a[1] + (b[1] - a[1]) * (tf || 0.42); c.fillStyle = '#0a0a0b'; c.fillRect(mx - 34, my - 15, 68, P >= 3 ? 30 : 16); c.fillStyle = '#f2f2f2'; c.textAlign = 'center'; c.fillText(label + ' ' + fmt(wv, 2), mx, my - 3); if (P >= 3) { c.fillStyle = '#e0a458'; c.fillText('∂ ' + fmt(gv, 3), mx, my + 11); } };
+      for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) edge(pos[0][i], pos[1][j], nb.W[0][j * 2 + i], SP.grad ? SP.grad.W[0][j * 2 + i] : 0, 'w' + (j + 1) + (i + 1), i === j ? 0.5 : 0.24);
+      for (let i = 0; i < 2; i++) edge(pos[1][i], pos[2][0], nb.W[1][i], SP.grad ? SP.grad.W[1][i] : 0, 'v' + (i + 1));
+      const node = (p, title, lines, hi) => { c.fillStyle = '#161618'; c.strokeStyle = hi ? '#c8102e' : '#3a3a3d'; c.lineWidth = hi ? 2 : 1; c.beginPath(); c.arc(p[0], p[1], 22, 0, 7); c.fill(); c.stroke(); c.fillStyle = '#9b9b9f'; c.textAlign = 'center'; c.fillText(title, p[0], p[1] + 4); lines.forEach((l, k) => { c.fillStyle = l[1]; c.fillText(l[0], p[0], p[1] + 38 + k * 14); }); };
+      node(pos[0][0], 'x₁', [['= ' + fmt(SP.x[0], 2), '#f2f2f2']]); node(pos[0][1], 'x₂', [['= ' + fmt(SP.x[1], 2), '#f2f2f2']]);
+      for (let j = 0; j < 2; j++) node(pos[1][j], 'h' + (j + 1), P >= 1 ? [['z = ' + fmt(SP.cache.z[1][j], 3), '#9b9b9f'], ['a = ' + fmt(SP.cache.a[1][j], 3), '#f2f2f2']].concat(P >= 3 ? [['δ = ' + fmt(SP.d1[j], 4), '#e0a458']] : []).concat([['b = ' + fmt(nb.b[0][j], 2), '#6c6c70']]) : [['b = ' + fmt(nb.b[0][j], 2), '#6c6c70']], P === 1 || P === 3);
+      node(pos[2][0], 'ŷ', P >= 1 ? [['ŷ = ' + fmt(SP.cache.a[2][0], 4), '#f2f2f2'], ['y = ' + SP.y, '#c8102e']].concat(P >= 2 ? [['L = ' + fmt(SP.lossBefore, 4), '#c8102e']] : []).concat(P >= 3 ? [['δ = ' + fmt(SP.d2, 4), '#e0a458']] : []) : [['y = ' + SP.y, '#c8102e']], P >= 1);
+      // formules avec les nombres
+      const x = SP.x, W = nb.W, b = nb.b; let s = '';
+      if (P === 0) s = (lang === 'fr' ? 'Exemple : x = (' : 'Example: x = (') + fmt(x[0], 2) + ' ; ' + fmt(x[1], 2) + '), ' + (lang === 'fr' ? 'classe attendue y = ' : 'expected class y = ') + SP.y + '\n\n' + (lang === 'fr' ? '« Étape suivante » calcule la sortie du réseau.' : '“Next step” computes the output of the network.');
+      if (P >= 1) {
+        const z = SP.cache.z, a = SP.cache.a;
+        s += (lang === 'fr' ? '<b>Propagation avant</b>\n' : '<b>Forward pass</b>\n');
+        for (let j = 0; j < 2; j++) s += 'z' + (j + 1) + ' = ' + fmt(W[0][j * 2], 3) + '×' + fmt(x[0], 2) + ' + ' + fmt(W[0][j * 2 + 1], 3) + '×' + fmt(x[1], 2) + ' + ' + fmt(b[0][j], 3) + ' = ' + fmt(z[1][j], 4) + '   a' + (j + 1) + ' = tanh(z' + (j + 1) + ') = ' + fmt(a[1][j], 4) + '\n';
+        s += 'z = ' + fmt(W[1][0], 3) + '×' + fmt(a[1][0], 3) + ' + ' + fmt(W[1][1], 3) + '×' + fmt(a[1][1], 3) + ' + ' + fmt(b[1][0], 3) + ' = ' + fmt(z[2][0], 4) + '   ŷ = σ(z) = ' + fmt(a[2][0], 4) + '\n';
+      }
+      if (P >= 2) s += '\n' + (lang === 'fr' ? '<b>Perte</b> (entropie croisée)\n' : '<b>Loss</b> (cross-entropy)\n') + 'L = −[y·ln ŷ + (1 − y)·ln(1 − ŷ)] = ' + f4(SP.lossBefore) + '\n';
+      if (P >= 3) {
+        const a = SP.cache.a;
+        s += '\n' + (lang === 'fr' ? '<b>Rétropropagation</b>\n' : '<b>Back-propagation</b>\n') + 'δ = ŷ − y = ' + fmt(a[2][0], 4) + ' − ' + SP.y + ' = ' + f4(SP.d2) + '\n';
+        s += '∂L/∂v₁ = δ·a₁ = ' + f4(SP.grad.W[1][0]) + '   ∂L/∂v₂ = δ·a₂ = ' + f4(SP.grad.W[1][1]) + '   ∂L/∂b = δ\n';
+        for (let j = 0; j < 2; j++) s += 'δ' + (j + 1) + ' = v' + (j + 1) + '·δ·(1 − a' + (j + 1) + '²) = ' + fmt(W[1][j], 3) + '×' + fmt(SP.d2, 4) + '×' + fmt(1 - a[1][j] ** 2, 4) + ' = ' + f4(SP.d1[j]) + '\n';
+        s += '∂L/∂w_ji = δj·xi  →  ∂L/∂w₁₁ = ' + f4(SP.grad.W[0][0]) + ' …\n';
+      }
+      if (P >= 4) s += '\n' + (lang === 'fr' ? '<b>Mise à jour</b> w ← w − η·∂L/∂w, η = ' : '<b>Update</b> w ← w − η·∂L/∂w, η = ') + fmt(SP.eta, 2) + '\n' + (lang === 'fr' ? 'perte sur cet exemple : ' : 'loss on this example: ') + f4(SP.lossBefore) + ' → <b>' + f4(SP.lossAfter) + '</b>\n';
+      $('formula').innerHTML = s;
+      // tableau des gradients
+      const rows = [];
+      const names = [['W', 0, 0, 'w₁₁'], ['W', 0, 1, 'w₁₂'], ['W', 0, 2, 'w₂₁'], ['W', 0, 3, 'w₂₂'], ['b', 0, 0, 'b₁'], ['b', 0, 1, 'b₂'], ['W', 1, 0, 'v₁'], ['W', 1, 1, 'v₂'], ['b', 1, 0, 'b']];
+      names.forEach(([k, l, q, nm]) => { const g = SP.grad ? SP.grad[k][l][q] : NaN, num = SP.num ? SP.num[k][l][q] : NaN, d = Math.abs(g - num); rows.push('<tr><td>' + nm + '</td><td class="n">' + fmt(nb[k][l][q], 4) + '</td><td class="n">' + (P >= 3 ? fmt(g, 6) : '') + '</td><td class="n">' + (P >= 3 ? fmt(num, 6) : '') + '</td><td class="n good">' + (P >= 3 ? d.toExponential(0) : '') + '</td><td class="n">' + (P >= 4 ? fmt(net2[k][l][q], 4) : '') + '</td></tr>'); });
+      $('gradTab').innerHTML = '<thead><tr>' + t('gradCols').map((x2, i) => '<th' + (i ? ' class="n"' : '') + '>' + x2 + '</th>').join('') + '</tr></thead><tbody>' + rows.join('') + '</tbody>';
+    }
+    $('sNext').addEventListener('click', () => { if (SP.phase >= 4) spNewEx(); else spStep(); });
+    $('sNew').addEventListener('click', spNewEx);
+    $('sReset').addEventListener('click', spReset);
+    $('sAuto').addEventListener('click', () => { for (let k = 0; k < 50; k++) { spNewEx(); for (let s = 0; s < 4; s++) spStep(); } });
+    function renderEta() { $('sEta').innerHTML = ''; seg($('sEta'), [[0.1, '0,1'], [0.5, '0,5'], [2, '2']].map(([v, l]) => [v, lang === 'fr' ? l : l.replace(',', '.')]), SP.eta, (v) => { SP.eta = v; renderEta(); }).style.margin = '0'; }
+
+    // ================================================================== 3. CHIFFRES
+    const DIG = N.parseDigits(window.DIGITS), DSP = N.split(DIG.X.length, 0.2, 11);
+    const DXtr = DSP.train.map((i) => DIG.X[i]), DYtr = DSP.train.map((i) => DIG.Y[i]), DXte = DSP.test.map((i) => DIG.X[i]), DYte = DSP.test.map((i) => DIG.Y[i]);
+    const D = { hidden: 32, act: 'relu', opt: 'adam', lr: 0.005, epochs: 20, net: null, optm: null, ep: 0, hist: [], training: 0, r: N.rng(4) };
+    function dBuild(seed) { D.net = N.create(D.hidden ? [64, D.hidden, 10] : [64, 10], D.act, 'softmax', seed || 1); D.optm = N.optimizer(D.net, { type: D.opt, lr: D.lr }); D.ep = 0; D.hist = [[0, N.accuracy(D.net, DXtr, DYtr), N.accuracy(D.net, DXte, DYte)]]; D.r = N.rng(seed || 4); dDraw(); }
+    function renderDCtl() {
+      const box = $('dctl'); box.innerHTML = '';
+      lbl(box, t('hidden')); seg(box, [[0, t('none')], [16, '16'], [32, '32'], [64, '64'], [128, '128']], D.hidden, (v) => { D.hidden = v; dBuild(1); renderDCtl(); });
+      lbl(box, t('act')); seg(box, [['relu', 'ReLU'], ['tanh', 'tanh'], ['sigmoid', lang === 'fr' ? 'sigmoïde' : 'sigmoid']], D.act, (v) => { D.act = v; dBuild(1); renderDCtl(); });
+      lbl(box, t('opt')); seg(box, [['sgd', lang === 'fr' ? 'gradient' : 'SGD'], ['momentum', lang === 'fr' ? 'moment' : 'momentum'], ['adam', 'Adam']], D.opt, (v) => { D.opt = v; D.lr = v === 'adam' ? 0.005 : 0.1; D.optm = N.optimizer(D.net, { type: v, lr: D.lr }); renderDCtl(); });
+      slider(box, t('lrL'), LR.to(D.lr), 0, 1, 0.001, (u) => String(sig2(LR.from(u))), (u) => { D.lr = sig2(LR.from(u)); D.optm = N.optimizer(D.net, { type: D.opt, lr: D.lr }); });
+      lbl(box, t('epochs')); seg(box, [[5, '5'], [20, '20'], [50, '50']], D.epochs, (v) => { D.epochs = v; renderDCtl(); });
+      const row = document.createElement('div'); row.className = 'controls';
+      const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'btn primary'; bt.id = 'dTrain'; bt.textContent = D.training ? t('dStop') : t('dTrain'); bt.addEventListener('click', () => { if (D.training) D.training = 0; else dTrain(D.epochs); renderDCtl(); });
+      const br = document.createElement('button'); br.type = 'button'; br.className = 'btn'; br.textContent = t('dReset'); br.addEventListener('click', () => { D.training = 0; dBuild(1 + Math.floor(Math.random() * 1e6)); renderDCtl(); });
+      row.append(bt, br); box.appendChild(row);
+    }
+    function dTrain(n) {
+      D.training = n;
+      const tick = () => {
+        if (!D.training) return;
+        N.epoch(D.net, D.optm, DXtr, DYtr, 32, 1e-4, D.r); D.ep++; D.training--;
+        D.hist.push([D.ep, N.accuracy(D.net, DXtr, DYtr), N.accuracy(D.net, DXte, DYte)]);
+        dDraw(); if (D.training) setTimeout(tick, 0); else renderDCtl();
+      };
+      setTimeout(tick, 0);
+    }
+    function paint8(cv, x, signed) {
+      const c = cv.getContext('2d'), img = c.createImageData(8, 8); let sc = 1; if (signed) { sc = 1e-9; for (const v of x) sc = Math.max(sc, Math.abs(v)); }
+      for (let i = 0; i < 64; i++) { let col; if (signed) { const v = x[i] / sc; col = v >= 0 ? [12 + 188 * v, 12 + 4 * v, 13 + 33 * v] : [12 - 150 * v, 12 - 150 * v, 13 - 155 * v]; } else { const g = Math.round(x[i] * 255); col = [g, g, g]; } img.data[4 * i] = col[0]; img.data[4 * i + 1] = col[1]; img.data[4 * i + 2] = col[2]; img.data[4 * i + 3] = 255; }
+      c.putImageData(img, 0, 0);
+    }
+    function dDraw() {
+      const kpi = (k, v, u, main) => '<div class="kpi' + (main ? ' main' : '') + '"><dt>' + k + '</dt><dd>' + v + (u ? '<small>' + u + '</small>' : '') + '</dd></div>', last = D.hist[D.hist.length - 1];
+      $('dkpis').innerHTML = kpi(t('kEpoch'), String(D.ep), '') + kpi(t('kAccTr'), pct(last[1]), '') + kpi(t('kAccTe'), pct(last[2]), '', true) + kpi(t('kParams'), String(N.nParams(D.net)), '') + kpi(lang === 'fr' ? 'Réseau' : 'Network', D.net.sizes.join('-'), '') + kpi(lang === 'fr' ? 'Test' : 'Test', DXte.length + ' ' + (lang === 'fr' ? 'chiffres' : 'digits'), '');
+      if (view !== 'digits') return;
+      drawCurve($('cvDAcc'), [D.hist.map((p) => [p[0], p[1]]), D.hist.map((p) => [p[0], p[2]])], '', 1, true);
+      const M = N.confusion(D.net, DXte, DYte, 10); let mx = 1; M.forEach((r) => r.forEach((v) => (mx = Math.max(mx, v))));
+      $('conf').innerHTML = '<tr><th></th>' + M.map((_, j) => '<th style="text-align:center">' + j + '</th>').join('') + '</tr>' + M.map((r, i) => '<tr><th>' + i + '</th>' + r.map((v, j) => '<td style="background:' + (v ? (i === j ? 'rgba(200,16,46,' + (0.15 + 0.6 * v / mx) + ')' : 'rgba(224,164,88,' + Math.min(0.8, 0.25 + v / 6) + ')') : 'transparent') + ';color:' + (v ? '#f2f2f2' : '#3a3a3d') + '">' + v + '</td>').join('') + '</tr>').join('');
+      const er = $('errs'); er.innerHTML = '';
+      let k = 0; for (let i = 0; i < DXte.length && k < 40; i++) { const p = N.predict(D.net, DXte[i]), c = N.argmax(p); if (c !== DYte[i]) { const f = document.createElement('figure'), cv = document.createElement('canvas'); cv.width = 8; cv.height = 8; paint8(cv, DXte[i]); f.appendChild(cv); f.appendChild(document.createTextNode(DYte[i] + ' → ' + c)); er.appendChild(f); k++; } }
+      if (!k) er.textContent = '—';
+      const wt = $('wts'); wt.innerHTML = '';
+      if (D.hidden) for (let j = 0; j < Math.min(D.hidden, 32); j++) { const f = document.createElement('figure'), cv = document.createElement('canvas'); cv.width = 8; cv.height = 8; paint8(cv, D.net.W[0].slice(j * 64, j * 64 + 64), true); f.appendChild(cv); wt.appendChild(f); }
+      else for (let j = 0; j < 10; j++) { const f = document.createElement('figure'), cv = document.createElement('canvas'); cv.width = 8; cv.height = 8; paint8(cv, D.net.W[0].slice(j * 64, j * 64 + 64), true); f.appendChild(cv); f.appendChild(document.createTextNode(String(j))); wt.appendChild(f); }
+      padPredict();
+    }
+    // zone de dessin : les traits sont gardés, recadrés sur 32×32 (hauteur pleine, centré), puis réduits en blocs 4×4
+    let strokes = [], drawing = false;
+    const pad = $('pad');
+    function padRender() {
+      const c = pad.getContext('2d'); c.fillStyle = '#000'; c.fillRect(0, 0, 256, 256); c.strokeStyle = '#f2f2f2'; c.lineWidth = 18; c.lineCap = 'round'; c.lineJoin = 'round';
+      strokes.forEach((s) => { c.beginPath(); s.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); if (s.length === 1) c.lineTo(s[0][0] + 0.1, s[0][1]); c.stroke(); });
+    }
+    function padTo8() {
+      const pts = strokes.flat(); if (!pts.length) return null;
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity; pts.forEach(([x, y]) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
+      const pen = 4.4, size = 32 - pen, s = size / Math.max(y1 - y0, x1 - x0, 1), ox = 16 - ((x0 + x1) / 2) * s, oy = 16 - ((y0 + y1) / 2) * s;
+      const off = document.createElement('canvas'); off.width = 32; off.height = 32; const c = off.getContext('2d');
+      c.fillStyle = '#000'; c.fillRect(0, 0, 32, 32); c.strokeStyle = '#fff'; c.lineWidth = pen; c.lineCap = 'round'; c.lineJoin = 'round';
+      strokes.forEach((st) => { c.beginPath(); st.forEach(([x, y], i) => (i ? c.lineTo(x * s + ox, y * s + oy) : c.moveTo(x * s + ox, y * s + oy))); if (st.length === 1) c.lineTo(st[0][0] * s + ox + 0.1, st[0][1] * s + oy); c.stroke(); });
+      const d = c.getImageData(0, 0, 32, 32).data, bits = new Uint8Array(1024); for (let i = 0; i < 1024; i++) bits[i] = d[4 * i] > 127 ? 1 : 0;
+      return N.blocks32to8(bits);
+    }
+    function padPredict() {
+      const x = padTo8(), box = $('probs');
+      if (!x) { paint8($('pad8'), new Float64Array(64)); box.innerHTML = Array.from({ length: 10 }, (_, j) => '<div><span>' + j + '</span><i style="width:0"></i><span>—</span></div>').join(''); return; }
+      paint8($('pad8'), x);
+      const p = N.predict(D.net, x), b = N.argmax(p);
+      box.innerHTML = Array.from(p).map((v, j) => '<div class="' + (j === b ? 'best' : '') + '"><span>' + j + '</span><i style="width:' + Math.max(1, v * 100) + '%"></i><span>' + fmt(v * 100, 1) + ' %</span></div>').join('');
+    }
+    const padPos = (e) => { const r = pad.getBoundingClientRect(); return [((e.clientX - r.left) / r.width) * 256, ((e.clientY - r.top) / r.height) * 256]; };
+    pad.addEventListener('pointerdown', (e) => { drawing = true; pad.setPointerCapture(e.pointerId); strokes.push([padPos(e)]); padRender(); });
+    pad.addEventListener('pointermove', (e) => { if (!drawing) return; strokes[strokes.length - 1].push(padPos(e)); padRender(); padPredict(); });
+    pad.addEventListener('pointerup', () => { drawing = false; padPredict(); });
+    $('clear').addEventListener('click', () => { strokes = []; padRender(); padPredict(); });
+
+    // ================================================================== 4. VÉRIFICATIONS
+    function runChecks() {
+      $('chkBusy').textContent = t('computing');
+      setTimeout(() => {
+        const res = [], R = N.rng(77), U = (a, b) => a + (b - a) * R();
+        let worst = 0, abs = 0, cnt = 0;
+        for (const act of ['relu', 'leaky', 'tanh', 'sigmoid']) for (const out of ['sigmoid', 'softmax', 'linear']) {
+          const K = out === 'softmax' ? 3 : 1, n2 = N.create([3, 5, 4, K], act, out, 3); let X;
+          for (let k = 0; k < 300; k++) { X = Array.from({ length: 6 }, () => [U(-1, 1), U(-1, 1), U(-1, 1)]); if (N.minPreact(n2, X) > 1e-3) break; }
+          const Y = X.map((x, i) => (out === 'softmax' ? i % 3 : out === 'sigmoid' ? i % 2 : [x[0] * 2]));
+          const g = N.gradCheck(n2, X, Y, 0.01); worst = Math.max(worst, g.worst); abs = Math.max(abs, g.absMax); cnt += g.count;
+        }
+        res.push([lang === 'fr' ? 'Rétropropagation = différences finies (4 activations × 3 sorties, 2 couches cachées, L2)' : 'Back-propagation = finite differences (4 activations × 3 outputs, 2 hidden layers, L2)', '< 10⁻⁶', worst.toExponential(1) + ' (' + cnt + ' ' + (lang === 'fr' ? 'paramètres' : 'parameters') + ')', worst < 1e-6 && abs < 1e-8]);
+        { const n2 = N.create([2, 1], 'relu', 'linear', 1), w0 = n2.W[0][0], o = N.optimizer(n2, { type: 'adam', lr: 0.1 }); o.step({ W: [Float64Array.from([0.3, -2])], b: [Float64Array.from([0])] }); const d = w0 - n2.W[0][0]; res.push([lang === 'fr' ? 'Adam, premier pas = η × signe du gradient' : 'Adam, first step = η × sign of the gradient', fmt(0.1, 4), fmt(d, 4), Math.abs(d - 0.1) < 1e-6]); }
+        {
+          const X = [], Y = []; for (let i = 0; i < 40; i++) { const a = U(-1, 1); X.push([a]); Y.push([2 * a + 0.5 + 0.1 * N.gauss(R)]); }
+          const mx = X.reduce((s, x) => s + x[0], 0) / 40, my = Y.reduce((s, y) => s + y[0], 0) / 40; let sxy = 0, sxx = 0; X.forEach((x, i) => { sxy += (x[0] - mx) * (Y[i][0] - my); sxx += (x[0] - mx) ** 2; }); const a = sxy / sxx;
+          const n2 = N.create([1, 1], 'relu', 'linear', 1), o = N.optimizer(n2, { type: 'sgd', lr: 0.5 }); for (let k = 0; k < 2000; k++) o.step(N.batchGrad(n2, X, Y).g);
+          res.push([lang === 'fr' ? 'Descente de gradient = moindres carrés (pente)' : 'Gradient descent = least squares (slope)', fmt(a, 6), fmt(n2.W[0][0], 6), Math.abs(a - n2.W[0][0]) < 1e-6]);
+        }
+        {
+          const d = N.dataset('xor', 200, 0, 4), lin = N.create([2, 1], 'tanh', 'sigmoid', 1), ol = N.optimizer(lin, { type: 'adam', lr: 0.05 }); for (let e = 0; e < 150; e++) N.epoch(lin, ol, d.P, d.Y, 20, 0, N.rng(1));
+          const n4 = N.create([2, 4, 1], 'tanh', 'sigmoid', 1), o4 = N.optimizer(n4, { type: 'adam', lr: 0.03 }); for (let e = 0; e < 300; e++) N.epoch(n4, o4, d.P, d.Y, 20, 0, N.rng(1));
+          res.push([lang === 'fr' ? 'XOR sans couche cachée : impossible' : 'XOR without hidden layer: impossible', '< 80 %', pct(N.accuracy(lin, d.P, d.Y)), N.accuracy(lin, d.P, d.Y) < 0.8]);
+          res.push([lang === 'fr' ? 'XOR avec 4 neurones cachés : résolu' : 'XOR with 4 hidden neurons: solved', '≥ 98 %', pct(N.accuracy(n4, d.P, d.Y)), N.accuracy(n4, d.P, d.Y) >= 0.98]);
+        }
+        { const p = N.softmax(Float64Array.from([1000, 1001, 999])); const s = p[0] + p[1] + p[2]; res.push([lang === 'fr' ? 'Softmax stable (entrées de 1 000)' : 'Stable softmax (inputs of 1,000)', '1', fmt(s, 12), Math.abs(s - 1) < 1e-12]); }
+        { const one = new Uint8Array(1024); for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) one[i * 32 + j] = 1; const b = N.blocks32to8(one); res.push([lang === 'fr' ? 'Prétraitement UCI : bloc 4×4 plein = 16/16' : 'UCI preprocessing: full 4×4 block = 16/16', '1', fmt(b[0], 3), b[0] === 1]); }
+        const acc = N.accuracy(D.net, DXte, DYte);
+        res.push([lang === 'fr' ? 'Chiffres de test : précision du réseau actuel (' + D.ep + ' époques)' : 'Test digits: accuracy of the current network (' + D.ep + ' epochs)', D.ep >= 20 && D.hidden ? '> 94 %' : '—', D.ep ? pct(acc) : t('notTrained'), D.ep >= 20 && D.hidden ? acc > 0.94 : true]);
+        $('chk').innerHTML = '<thead><tr>' + t('chkCols').map((x) => '<th>' + x + '</th>').join('') + '</tr></thead><tbody>' + res.map(([a, b, c, g]) => '<tr><td>' + a + '</td><td>' + b + '</td><td>' + c + '</td><td class="' + (g ? 'good' : 'bad') + '">' + (g ? '✓ ' + t('ok') : '✗ ' + t('fail')) + '</td></tr>').join('') + '</tbody>';
+        $('chkBusy').textContent = '';
+      }, 30);
+    }
+
+    // ================================================================== navigation, langue
+    let view = 'learn';
+    function setView(v) {
+      view = v;
+      document.querySelectorAll('.tab').forEach((b) => b.setAttribute('aria-selected', b.dataset.view === v));
+      document.querySelectorAll('[data-pane]').forEach((p) => { p.hidden = p.dataset.pane !== v; });
+      try { history.replaceState(null, '', '#' + v); } catch (e) {}
+      if (v === 'step') spDraw();
+      if (v === 'digits') { if (!D.ep && !D.training) { dTrain(20); renderDCtl(); } dDraw(); padRender(); }
+      if (v === 'checks') runChecks();
+    }
+    document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
+    function setLang(l) {
+      lang = l; document.documentElement.lang = l;
+      document.querySelectorAll('[data-t]').forEach((el) => { const v = T[l][el.dataset.t]; if (typeof v === 'string') el.textContent = v; });
+      document.querySelectorAll('.lang button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.lang === l));
+      try { localStorage.setItem('lang', l); } catch (e) {}
+      $('play').textContent = running ? t('pause') : t('play');
+      renderCtl(); renderSpeed(); renderEta(); renderDCtl(); spDraw(); dDraw(); if (view === 'checks') runChecks();
+    }
+    document.querySelectorAll('.lang button').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.lang)));
+    buildData(); buildNet(1); spReset(); dBuild(1);
+    setLang(lang);
+    const h0 = (location.hash || '').slice(1);
+    setView(['learn', 'step', 'digits', 'checks'].includes(h0) ? h0 : 'learn');
+    requestAnimationFrame(loopL);
+  })();
+  </script>
+</body>
+</html>
